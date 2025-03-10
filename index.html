@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Split Timer</title>
+    <!-- Подключаем Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <style>
+        /* Стили полностью совпадают с предыдущей версией */
         body {
             margin: 0;
             padding: 0;
@@ -247,7 +251,7 @@
             overflow-y: auto;
             transition: left 0.3s ease;
             z-index: 1000;
-            display: none; /* Скрыто по умолчанию */
+            display: none;
         }
         .history-panel.open {
             left: 40px;
@@ -298,7 +302,7 @@
             font-size: 18px;
             transition: background 0.2s, transform 0.2s;
             z-index: 1001;
-            display: none; /* Скрыто по умолчанию */
+            display: none;
         }
         .history-toggle:hover {
             background: #45a049;
@@ -337,7 +341,7 @@
 <body>
     <div class="login-container" id="loginContainer">
         <h2>Вход</h2>
-        <input type="text" id="username" placeholder="Логин">
+        <input type="email" id="username" placeholder="Email">
         <input type="password" id="password" placeholder="Пароль">
         <button onclick="login()">Войти</button>
     </div>
@@ -399,6 +403,20 @@
     </div>
 
     <script>
+        // Конфигурация Firebase (замените на ваши значения)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBqyv136mKOV2EbtcqU8J3Hs_KElYERE_g",
+            authDomain: "split-684ac.firebaseapp.com",
+            projectId: "split-684ac",
+            storageBucket: "split-684ac.firebasestorage.app",
+            messagingSenderId: "1021647144178",
+            appId: "1:1021647144178:web:3d30efdd1cc3dc8cca7c6b"
+        };
+
+        // Инициализация Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
         const videoPlayer = document.getElementById('videoPlayer');
         let ytPlayer, twitchPlayer;
         let timer;
@@ -415,24 +433,68 @@
         const mainContainer = document.getElementById('mainContainer');
         const loginContainer = document.getElementById('loginContainer');
 
-        // Простая проверка логина и пароля
-        const validUsername = "admin";
-        const validPassword = "password123";
-
-        function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            if (username === validUsername && password === validPassword) {
+        // Проверка состояния авторизации
+        auth.onAuthStateChanged((user) => {
+            if (user) {
                 loginContainer.style.display = 'none';
                 mainContainer.style.display = 'block';
-                historyPanel.style.display = 'block'; // Показываем панель истории
-                historyToggle.style.display = 'flex'; // Показываем кнопку истории
-                console.log("Успешный вход");
+                historyPanel.style.display = 'block';
+                historyToggle.style.display = 'flex';
+                console.log("Пользователь вошел:", user.email);
             } else {
-                alert('Неверный логин или пароль');
+                loginContainer.style.display = 'block';
+                mainContainer.style.display = 'none';
+                historyPanel.style.display = 'none';
+                historyToggle.style.display = 'none';
+                console.log("Пользователь не авторизован");
             }
+        });
+
+        // Функция входа через Firebase
+        function login() {
+            const email = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            auth.signInWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    loginContainer.style.display = 'none';
+                    mainContainer.style.display = 'block';
+                    historyPanel.style.display = 'block';
+                    historyToggle.style.display = 'flex';
+                    console.log("Успешный вход:", user.email);
+                })
+                .catch((error) => {
+                    console.error("Ошибка входа:", error.code, error.message);
+                    switch (error.code) {
+                        case 'auth/invalid-email':
+                            alert('Неверный формат email');
+                            break;
+                        case 'auth/user-not-found':
+                            alert('Пользователь не найден');
+                            break;
+                        case 'auth/wrong-password':
+                            alert('Неверный пароль');
+                            break;
+                        case 'auth/invalid-credential':
+                            alert('Неверные учетные данные');
+                            break;
+                        default:
+                            alert('Ошибка входа: ' + error.message);
+                    }
+                });
         }
 
+        // Подключение YouTube и Twitch API
+        const ytScript = document.createElement('script');
+        ytScript.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(ytScript);
+
+        const twitchScript = document.createElement('script');
+        twitchScript.src = "https://player.twitch.tv/js/embed/v1.js";
+        document.head.appendChild(twitchScript);
+
+        // События для панели управления и истории
         controlsHeader.addEventListener('mouseenter', () => videoLoad.classList.add('open'));
         controlsHeader.addEventListener('mouseleave', () => {
             setTimeout(() => {
@@ -455,14 +517,7 @@
         historyPanel.addEventListener('mouseenter', () => historyPanel.classList.add('open'));
         historyPanel.addEventListener('mouseleave', () => historyPanel.classList.remove('open'));
 
-        const ytScript = document.createElement('script');
-        ytScript.src = "https://www.youtube.com/iframe_api";
-        document.head.appendChild(ytScript);
-
-        const twitchScript = document.createElement('script');
-        twitchScript.src = "https://player.twitch.tv/js/embed/v1.js";
-        document.head.appendChild(twitchScript);
-
+        // YouTube API
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('ytPlayer', {
                 events: {
@@ -491,6 +546,7 @@
             }
         }
 
+        // События локального видео
         videoPlayer.addEventListener('pause', () => {
             if (isRunning && currentPlayer === 'video') {
                 clearInterval(timer);
@@ -512,6 +568,7 @@
             console.log("Local video ended");
         });
 
+        // Обработка сообщений от плееров
         window.addEventListener('message', (event) => {
             if (event.origin.includes('vk.com') && currentPlayer === 'vkvideo') {
                 const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
@@ -561,6 +618,7 @@
             }
         });
 
+        // Загрузка видео
         function loadVideoFromUrl() {
             const url = document.getElementById('videoUrl').value.trim();
             stopAllPlayers();
@@ -639,6 +697,7 @@
             }
         }
 
+        // Парсинг URL
         function getYouTubeId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             return url.match(regExp)?.[2]?.length === 11 ? url.match(regExp)[2] : null;
@@ -660,6 +719,7 @@
             return url.match(regExp)?.[1] || null;
         }
 
+        // Управление плеерами
         function hideAllPlayers() {
             document.getElementById('videoPlayer').style.display = 'none';
             document.getElementById('ytPlayer').style.display = 'none';
@@ -679,6 +739,7 @@
             console.log("All players stopped");
         }
 
+        // Управление временем
         function startAdjust(unit, delta) {
             adjustTime(unit, delta);
             adjustInterval = setInterval(() => adjustTime(unit, delta), 100);
@@ -732,6 +793,7 @@
             console.log("Timer and history reset");
         }
 
+        // История
         function addToHistory(hours, minutes, seconds) {
             const additionalSeconds = (hours * 3600) + (minutes * 60) + seconds;
             const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -760,6 +822,7 @@
             }
         }
 
+        // Управление воспроизведением
         function playCurrentPlayer() {
             try {
                 if (currentPlayer === 'youtube' && ytPlayer) ytPlayer.playVideo();
@@ -802,6 +865,7 @@
             }
         }
 
+        // Обновление таймера
         function updateTimer() {
             if (totalSeconds <= 0) {
                 stopAllPlayers();
@@ -851,6 +915,7 @@
             });
         }
 
+        // Ночной режим
         function toggleNightMode() {
             document.body.classList.toggle('night-mode');
             const toggle = document.querySelector('.night-mode-toggle');
