@@ -145,6 +145,12 @@
             transition: background 0.2s, transform 0.1s;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+        #resetButton {
+            background: #ff4444;
+        }
+        #resetButton:hover {
+            background: #cc0000;
+        }
         button:hover {
             background: #45a049;
             transform: translateY(-1px);
@@ -181,10 +187,10 @@
             cursor: pointer;
             transition: transform 0.2s;
             align-self: flex-end;
-            color: #000; /* Черный для дневного режима */
+            color: #000;
         }
         .night-mode .night-mode-toggle {
-            color: #fff; /* Белый для ночного режима */
+            color: #fff;
         }
         .night-mode-toggle:hover {
             transform: scale(1.1);
@@ -223,16 +229,16 @@
             color: #fff;
         }
         .history-item.active {
-            background-color: #d4edda; /* Светло-зеленый для активного */
+            background-color: #d4edda;
         }
         .night-mode .history-item.active {
-            background-color: #2e7d32; /* Темно-зеленый для ночного режима */
+            background-color: #2e7d32;
         }
         .history-item.done {
-            background-color: #f8d7da; /* Светло-красный для прошедшего */
+            background-color: #f8d7da;
         }
         .night-mode .history-item.done {
-            background-color: #c62828; /* Темно-красный для ночного режима */
+            background-color: #c62828;
         }
         .history-toggle {
             position: fixed;
@@ -326,8 +332,8 @@
                     <input type="number" id="seconds" min="0" max="59" value="0" class="time-input" onchange="updateTimeValue('seconds')">
                     <button class="time-btn" onmousedown="startAdjust('seconds', 1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">+</button>
                 </div>
-                <button onclick="startTimer()">Начать</button>
                 <button onclick="addTime()">Добавить</button>
+                <button id="resetButton" onclick="resetTimer()">Сброс</button>
                 <span>Осталось: <span id="timeLeft"><span id="hoursDisplay" class="time-unit">00</span>:<span id="minutesDisplay" class="time-unit">00</span>:<span id="secondsDisplay" class="time-unit">00</span></span></span>
             </div>
             <span class="night-mode-toggle" onclick="toggleNightMode()">☾</span>
@@ -404,6 +410,10 @@
         const ytScript = document.createElement('script');
         ytScript.src = "https://www.youtube.com/iframe_api";
         document.head.appendChild(ytScript);
+
+        const twitchScript = document.createElement('script');
+        twitchScript.src = "https://player.twitch.tv/js/embed/v1.js";
+        document.head.appendChild(twitchScript);
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('ytPlayer', {
@@ -489,12 +499,27 @@
                     stopTimer();
                     console.log("Rutube ended");
                 }
+            } else if (event.origin.includes('twitch.tv') && currentPlayer === 'twitch') {
+                const data = event.data;
+                console.log("Twitch message:", data);
+                if (data.event === 'play' && !isRunning && totalSeconds > 0) {
+                    isRunning = true;
+                    timer = setInterval(updateTimer, 1000);
+                    console.log("Twitch playing, timer started");
+                } else if (data.event === 'pause' && isRunning) {
+                    clearInterval(timer);
+                    isRunning = false;
+                    console.log("Twitch paused, timer stopped");
+                } else if (data.event === 'ended') {
+                    stopTimer();
+                    console.log("Twitch ended");
+                }
             }
         });
 
         function loadVideoFromUrl() {
             const url = document.getElementById('videoUrl').value.trim();
-            stopTimer();
+            stopAllPlayers(); // Останавливаем все плееры перед загрузкой нового
             hideAllPlayers();
 
             if (url.includes('youtube.com') || url.includes('youtu.be')) {
@@ -533,7 +558,11 @@
                     currentPlayer = 'twitch';
                     document.getElementById('twitchPlayer').style.display = 'block';
                     document.getElementById('twitchPlayer').src = `https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}&autoplay=false`;
-                    setTimeout(() => pauseCurrentPlayer(), 1500);
+                    twitchPlayer = new Twitch.Player('twitchPlayer', {
+                        video: videoId,
+                        parent: [window.location.hostname]
+                    });
+                    twitchPlayer.pause();
                 } else {
                     alert('Неверный URL Twitch');
                 }
@@ -550,7 +579,7 @@
             const fileInput = document.getElementById('videoFile');
             const file = fileInput.files[0];
             if (file) {
-                stopTimer();
+                stopAllPlayers();
                 hideAllPlayers();
                 currentPlayer = 'video';
                 document.getElementById('videoPlayer').style.display = 'block';
@@ -592,6 +621,17 @@
             document.getElementById('twitchPlayer').style.display = 'none';
         }
 
+        function stopAllPlayers() {
+            if (currentPlayer === 'youtube' && ytPlayer) ytPlayer.stopVideo();
+            if (currentPlayer === 'video') videoPlayer.pause();
+            if (currentPlayer === 'vkvideo') document.getElementById('vkVideoPlayer').contentWindow.postMessage('{"method":"pause"}', '*');
+            if (currentPlayer === 'rutube') document.getElementById('rutubePlayer').contentWindow.postMessage('{"type":"player:pause"}', '*');
+            if (currentPlayer === 'twitch' && twitchPlayer) twitchPlayer.pause();
+            if (timer) clearInterval(timer);
+            isRunning = false;
+            console.log("All players stopped");
+        }
+
         function startAdjust(unit, delta) {
             adjustTime(unit, delta);
             adjustInterval = setInterval(() => adjustTime(unit, delta), 100);
@@ -615,25 +655,6 @@
             input.value = value;
         }
 
-        function startTimer() {
-            const hours = parseInt(document.getElementById('hours').value) || 0;
-            const minutes = parseInt(document.getElementById('minutes').value) || 0;
-            const seconds = parseInt(document.getElementById('seconds').value) || 0;
-            const additionalSeconds = (hours * 3600) + (minutes * 60) + seconds;
-
-            if (additionalSeconds <= 0) return;
-
-            totalSeconds = additionalSeconds;
-            if (!isRunning) {
-                playCurrentPlayer();
-                isRunning = true;
-                timer = setInterval(updateTimer, 1000);
-                console.log("Timer started with", totalSeconds, "seconds");
-            }
-            updateTimeDisplay();
-            addToHistory(hours, minutes, seconds);
-        }
-
         function addTime() {
             const hours = parseInt(document.getElementById('hours').value) || 0;
             const minutes = parseInt(document.getElementById('minutes').value) || 0;
@@ -652,6 +673,16 @@
             }
             console.log("Time added:", additionalSeconds, "total:", totalSeconds);
             addToHistory(hours, minutes, seconds);
+        }
+
+        function resetTimer() {
+            stopAllPlayers();
+            totalSeconds = 0;
+            isRunning = false;
+            historyEntries = [];
+            historyList.innerHTML = '';
+            updateTimeDisplay();
+            console.log("Timer and history reset");
         }
 
         function addToHistory(hours, minutes, seconds) {
@@ -694,8 +725,8 @@
                     document.getElementById('rutubePlayer').contentWindow.postMessage('{"type":"player:play"}', '*');
                     console.log("Rutube play command sent");
                 }
-                else if (currentPlayer === 'twitch') {
-                    document.getElementById('twitchPlayer').contentWindow.postMessage({ eventName: 'play' }, '*');
+                else if (currentPlayer === 'twitch' && twitchPlayer) {
+                    twitchPlayer.play();
                     console.log("Twitch play command sent");
                 }
             } catch (e) {
@@ -715,8 +746,8 @@
                     document.getElementById('rutubePlayer').contentWindow.postMessage('{"type":"player:pause"}', '*');
                     console.log("Rutube pause command sent");
                 }
-                else if (currentPlayer === 'twitch') {
-                    document.getElementById('twitchPlayer').contentWindow.postMessage({ eventName: 'pause' }, '*');
+                else if (currentPlayer === 'twitch' && twitchPlayer) {
+                    twitchPlayer.pause();
                     console.log("Twitch pause command sent");
                 }
             } catch (e) {
@@ -726,8 +757,7 @@
 
         function updateTimer() {
             if (totalSeconds <= 0) {
-                stopTimer();
-                pauseCurrentPlayer();
+                stopAllPlayers();
                 return;
             }
 
