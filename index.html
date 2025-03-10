@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Split Timer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+            overflow-x: hidden;
+        }
+        body.night-mode {
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            padding: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+        .controls {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+            position: relative;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .night-mode .controls {
+            background: #2d2d2d;
+        }
+        .video-container {
+            width: 100%;
+            position: relative;
+            background: #000000;
+        }
+        #videoPlayer, #ytPlayer, #vkVideoPlayer, #rutubePlayer, #twitchPlayer {
+            width: 100%;
+            height: 720px;
+            max-height: 80vh;
+            aspect-ratio: 16 / 9;
+            background: black;
+            display: none;
+        }
+        #videoPlayer {
+            display: block;
+        }
+        .control-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .video-load {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .video-load.open {
+            max-height: 150px;
+        }
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        input[type="text"], input[type="file"] {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .night-mode input[type="text"], .night-mode input[type="file"] {
+            background: #3d3d3d;
+            border-color: #555;
+            color: #fff;
+        }
+        .time-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .time-input {
+            width: 50px;
+            text-align: center;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #fff;
+            transition: border-color 0.3s;
+        }
+        .night-mode .time-input {
+            background: #3d3d3d;
+            border-color: #555;
+            color: #fff;
+        }
+        .time-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .time-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            background: #4CAF50;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .time-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .time-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        button:hover {
+            background: #45a049;
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        #timeLeft {
+            font-size: clamp(24px, 5vw, 60px);
+            font-family: monospace;
+            display: inline-block;
+            margin-left: 10px;
+            color: #000;
+            transition: color 0.3s;
+        }
+        .night-mode #timeLeft {
+            color: #ffffff;
+        }
+        .time-unit {
+            display: inline-block;
+            min-width: 2ch;
+        }
+        .smooth-blink {
+            animation: smoothBlink 1.5s ease-in-out infinite;
+        }
+        @keyframes smoothBlink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .night-mode-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            align-self: flex-end;
+            color: #000; /* Черный для дневного режима */
+        }
+        .night-mode .night-mode-toggle {
+            color: #fff; /* Белый для ночного режима */
+        }
+        .night-mode-toggle:hover {
+            transform: scale(1.1);
+        }
+        .history-panel {
+            position: fixed;
+            top: 0;
+            left: -260px;
+            width: 250px;
+            height: 100vh;
+            background: #f8f8f8;
+            padding: 10px;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            transition: left 0.3s ease;
+            z-index: 1000;
+        }
+        .history-panel.open {
+            left: 40px;
+        }
+        .night-mode .history-panel {
+            background: #252525;
+            border-right-color: #444;
+        }
+        .history-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: #fff;
+            border-radius: 4px;
+            font-size: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+        .night-mode .history-item {
+            background: #333;
+            color: #fff;
+        }
+        .history-item.active {
+            background-color: #d4edda; /* Светло-зеленый для активного */
+        }
+        .night-mode .history-item.active {
+            background-color: #2e7d32; /* Темно-зеленый для ночного режима */
+        }
+        .history-item.done {
+            background-color: #f8d7da; /* Светло-красный для прошедшего */
+        }
+        .night-mode .history-item.done {
+            background-color: #c62828; /* Темно-красный для ночного режима */
+        }
+        .history-toggle {
+            position: fixed;
+            top: 50%;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: background 0.2s, transform 0.2s;
+            z-index: 1001;
+        }
+        .history-toggle:hover {
+            background: #45a049;
+            transform: scale(1.1);
+        }
+        @media (max-width: 768px) {
+            .control-row {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .time-group {
+                flex: 1;
+            }
+            button, input[type="text"], input[type="file"] {
+                width: 100%;
+            }
+            #videoPlayer, #ytPlayer, #vkVideoPlayer, #rutubePlayer, #twitchPlayer {
+                height: 50vh;
+            }
+            .history-panel {
+                width: 200px;
+                left: -210px;
+            }
+            .history-panel.open {
+                left: 40px;
+            }
+            .history-toggle {
+                left: 5px;
+                width: 25px;
+                height: 25px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="history-toggle" id="historyToggle">🕒</button>
+    <div class="history-panel" id="historyPanel">
+        <h3 style="margin: 0 0 10px 0;">История добавлений</h3>
+        <div id="historyList"></div>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <div class="controls-header" id="controlsHeader">
+                <h3 style="margin: 0;">Управление временем</h3>
+            </div>
+            <div class="video-load" id="videoLoad">
+                <div class="control-row">
+                    <input type="text" id="videoUrl" placeholder="Вставьте URL видео (YouTube, VK Video, Rutube, Twitch или прямую ссылку)">
+                    <button onclick="loadVideoFromUrl()">Загрузить с URL</button>
+                </div>
+                <div class="control-row">
+                    <input type="file" id="videoFile" accept="video/*">
+                    <button onclick="loadVideoFromFile()">Загрузить с ПК</button>
+                </div>
+            </div>
+            <div class="control-row">
+                <label>Часы:</label>
+                <div class="time-group">
+                    <button class="time-btn" onmousedown="startAdjust('hours', -1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">−</button>
+                    <input type="number" id="hours" min="0" value="0" class="time-input" onchange="updateTimeValue('hours')">
+                    <button class="time-btn" onmousedown="startAdjust('hours', 1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">+</button>
+                </div>
+                <label>Минуты:</label>
+                <div class="time-group">
+                    <button class="time-btn" onmousedown="startAdjust('minutes', -1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">−</button>
+                    <input type="number" id="minutes" min="0" max="59" value="0" class="time-input" onchange="updateTimeValue('minutes')">
+                    <button class="time-btn" onmousedown="startAdjust('minutes', 1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">+</button>
+                </div>
+                <label>Секунды:</label>
+                <div class="time-group">
+                    <button class="time-btn" onmousedown="startAdjust('seconds', -1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">−</button>
+                    <input type="number" id="seconds" min="0" max="59" value="0" class="time-input" onchange="updateTimeValue('seconds')">
+                    <button class="time-btn" onmousedown="startAdjust('seconds', 1)" onmouseup="stopAdjust()" onmouseleave="stopAdjust()">+</button>
+                </div>
+                <button onclick="startTimer()">Начать</button>
+                <button onclick="addTime()">Добавить</button>
+                <span>Осталось: <span id="timeLeft"><span id="hoursDisplay" class="time-unit">00</span>:<span id="minutesDisplay" class="time-unit">00</span>:<span id="secondsDisplay" class="time-unit">00</span></span></span>
+            </div>
+            <span class="night-mode-toggle" onclick="toggleNightMode()">☾</span>
+        </div>
+        <div class="video-container" id="videoContainer">
+            <video id="videoPlayer" controls playsinline>
+                <source id="videoSource" src="" type="video/mp4">
+                Ваш браузер не поддерживает видео.
+            </video>
+            <iframe id="ytPlayer" type="text/html" src="https://www.youtube.com/embed/?enablejsapi=1" frameborder="0" allowfullscreen></iframe>
+            <iframe id="vkVideoPlayer" src="" frameborder="0" allowfullscreen></iframe>
+            <iframe id="rutubePlayer" src="" frameborder="0" allowfullscreen></iframe>
+            <iframe id="twitchPlayer" src="" frameborder="0" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <script>
+        const videoPlayer = document.getElementById('videoPlayer');
+        let ytPlayer, vkVideoPlayer, rutubePlayer, twitchPlayer;
+        let timer;
+        let totalSeconds = 0;
+        let isRunning = false;
+        let currentPlayer = 'video';
+        let adjustInterval;
+        const controlsHeader = document.getElementById('controlsHeader');
+        const videoLoad = document.getElementById('videoLoad');
+        const historyPanel = document.getElementById('historyPanel');
+        const historyToggle = document.getElementById('historyToggle');
+        const historyList = document.getElementById('historyList');
+        let historyEntries = [];
+
+        controlsHeader.addEventListener('mouseenter', () => {
+            videoLoad.classList.add('open');
+        });
+
+        controlsHeader.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!videoLoad.matches(':hover')) {
+                    videoLoad.classList.remove('open');
+                }
+            }, 100);
+        });
+
+        videoLoad.addEventListener('mouseenter', () => {
+            videoLoad.classList.add('open');
+        });
+
+        videoLoad.addEventListener('mouseleave', () => {
+            videoLoad.classList.remove('open');
+        });
+
+        historyToggle.addEventListener('mouseenter', () => {
+            if (window.innerWidth > 768 || window.innerWidth - historyToggle.getBoundingClientRect().right > 30) {
+                historyPanel.classList.add('open');
+            }
+        });
+
+        historyToggle.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!historyPanel.matches(':hover')) {
+                    historyPanel.classList.remove('open');
+                }
+            }, 100);
+        });
+
+        historyPanel.addEventListener('mouseenter', () => {
+            historyPanel.classList.add('open');
+        });
+
+        historyPanel.addEventListener('mouseleave', () => {
+            historyPanel.classList.remove('open');
+        });
+
+        const ytScript = document.createElement('script');
+        ytScript.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(ytScript);
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('ytPlayer', {
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            console.log("Player ready:", currentPlayer);
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.PAUSED && isRunning && currentPlayer === 'youtube') {
+                clearInterval(timer);
+                isRunning = false;
+                console.log("YouTube paused, timer stopped");
+            } else if (event.data === YT.PlayerState.PLAYING && !isRunning && totalSeconds > 0 && currentPlayer === 'youtube') {
+                isRunning = true;
+                timer = setInterval(updateTimer, 1000);
+                console.log("YouTube playing, timer started");
+            } else if (event.data === YT.PlayerState.ENDED && currentPlayer === 'youtube') {
+                stopTimer();
+                console.log("YouTube ended");
+            }
+        }
+
+        videoPlayer.addEventListener('pause', () => {
+            if (isRunning && currentPlayer === 'video') {
+                clearInterval(timer);
+                isRunning = false;
+                console.log("Local video paused, timer stopped");
+            }
+        });
+
+        videoPlayer.addEventListener('play', () => {
+            if (!isRunning && totalSeconds > 0 && currentPlayer === 'video') {
+                isRunning = true;
+                timer = setInterval(updateTimer, 1000);
+                console.log("Local video playing, timer started");
+            }
+        });
+
+        videoPlayer.addEventListener('ended', () => {
+            if (currentPlayer === 'video') stopTimer();
+            console.log("Local video ended");
+        });
+
+        videoPlayer.addEventListener('loadeddata', () => {
+            console.log("Local video loaded");
+        });
+
+        window.addEventListener('message', (event) => {
+            if (event.origin.includes('vk.com') && currentPlayer === 'vkvideo') {
+                const data = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+                console.log("VK Video message:", data);
+                if (data.includes('"method":"play"') && !isRunning && totalSeconds > 0) {
+                    isRunning = true;
+                    timer = setInterval(updateTimer, 1000);
+                    console.log("VK Video playing, timer started");
+                } else if (data.includes('"method":"pause"') && isRunning) {
+                    clearInterval(timer);
+                    isRunning = false;
+                    console.log("VK Video paused, timer stopped");
+                } else if (data.includes('finish')) {
+                    stopTimer();
+                    console.log("VK Video ended");
+                }
+            } else if (event.origin.includes('rutube.ru') && currentPlayer === 'rutube') {
+                const data = JSON.parse(event.data || '{}');
+                console.log("Rutube message:", data);
+                if (data.type === 'player:play' && !isRunning && totalSeconds > 0) {
+                    isRunning = true;
+                    timer = setInterval(updateTimer, 1000);
+                    console.log("Rutube playing, timer started");
+                } else if (data.type === 'player:pause' && isRunning) {
+                    clearInterval(timer);
+                    isRunning = false;
+                    console.log("Rutube paused, timer stopped");
+                } else if (data.type === 'player:ended') {
+                    stopTimer();
+                    console.log("Rutube ended");
+                }
+            }
+        });
+
+        function loadVideoFromUrl() {
+            const url = document.getElementById('videoUrl').value.trim();
+            stopTimer();
+            hideAllPlayers();
+
+            if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                const videoId = getYouTubeId(url);
+                if (videoId) {
+                    currentPlayer = 'youtube';
+                    document.getElementById('ytPlayer').style.display = 'block';
+                    ytPlayer.loadVideoById(videoId);
+                    ytPlayer.pauseVideo();
+                } else {
+                    alert('Неверный URL YouTube');
+                }
+            } else if (url.includes('vk.com') || url.includes('vkvideo.ru')) {
+                const videoId = getVKVideoId(url);
+                if (videoId) {
+                    currentPlayer = 'vkvideo';
+                    document.getElementById('vkVideoPlayer').style.display = 'block';
+                    document.getElementById('vkVideoPlayer').src = `https://vk.com/video_ext.php?oid=${videoId.oid}&id=${videoId.id}&hash=${videoId.hash || ''}&autoplay=0`;
+                    setTimeout(() => pauseCurrentPlayer(), 1500);
+                } else {
+                    alert('Неверный URL VK Video');
+                }
+            } else if (url.includes('rutube.ru')) {
+                const videoId = getRutubeId(url);
+                if (videoId) {
+                    currentPlayer = 'rutube';
+                    document.getElementById('rutubePlayer').style.display = 'block';
+                    document.getElementById('rutubePlayer').src = `https://rutube.ru/play/embed/${videoId}?autoStart=0`;
+                    setTimeout(() => pauseCurrentPlayer(), 1500);
+                } else {
+                    alert('Неверный URL Rutube');
+                }
+            } else if (url.includes('twitch.tv')) {
+                const videoId = getTwitchId(url);
+                if (videoId) {
+                    currentPlayer = 'twitch';
+                    document.getElementById('twitchPlayer').style.display = 'block';
+                    document.getElementById('twitchPlayer').src = `https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}&autoplay=false`;
+                    setTimeout(() => pauseCurrentPlayer(), 1500);
+                } else {
+                    alert('Неверный URL Twitch');
+                }
+            } else {
+                currentPlayer = 'video';
+                document.getElementById('videoPlayer').style.display = 'block';
+                document.getElementById('videoSource').src = url;
+                videoPlayer.load();
+                videoPlayer.pause();
+            }
+        }
+
+        function loadVideoFromFile() {
+            const fileInput = document.getElementById('videoFile');
+            const file = fileInput.files[0];
+            if (file) {
+                stopTimer();
+                hideAllPlayers();
+                currentPlayer = 'video';
+                document.getElementById('videoPlayer').style.display = 'block';
+                const url = URL.createObjectURL(file);
+                document.getElementById('videoSource').src = url;
+                videoPlayer.load();
+                videoPlayer.pause();
+            } else {
+                alert('Выберите видеофайл');
+            }
+        }
+
+        function getYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            return url.match(regExp)?.[2]?.length === 11 ? url.match(regExp)[2] : null;
+        }
+
+        function getVKVideoId(url) {
+            const regExp = /(?:vk\.com\/video|vkvideo\.ru\/video)(-?\d+)_(\d+)(?:.*hash=([a-z0-9]+))?/i;
+            const match = url.match(regExp);
+            return match ? { oid: match[1], id: match[2], hash: match[3] } : null;
+        }
+
+        function getRutubeId(url) {
+            const regExp = /rutube\.ru\/(?:video\/|play\/embed\/)?([a-z0-9]+)/i;
+            return url.match(regExp)?.[1] || null;
+        }
+
+        function getTwitchId(url) {
+            const regExp = /twitch\.tv\/(?:videos\/|.*v=)?(\d+)/i;
+            return url.match(regExp)?.[1] || null;
+        }
+
+        function hideAllPlayers() {
+            document.getElementById('videoPlayer').style.display = 'none';
+            document.getElementById('ytPlayer').style.display = 'none';
+            document.getElementById('vkVideoPlayer').style.display = 'none';
+            document.getElementById('rutubePlayer').style.display = 'none';
+            document.getElementById('twitchPlayer').style.display = 'none';
+        }
+
+        function startAdjust(unit, delta) {
+            adjustTime(unit, delta);
+            adjustInterval = setInterval(() => adjustTime(unit, delta), 100);
+        }
+
+        function stopAdjust() {
+            clearInterval(adjustInterval);
+        }
+
+        function adjustTime(unit, delta) {
+            const input = document.getElementById(unit);
+            let value = parseInt(input.value) || 0;
+            value = Math.max(0, unit === 'hours' ? value + delta : Math.min(59, value + delta));
+            input.value = value;
+        }
+
+        function updateTimeValue(unit) {
+            const input = document.getElementById(unit);
+            let value = parseInt(input.value) || 0;
+            value = Math.max(0, unit === 'hours' ? value : Math.min(59, value));
+            input.value = value;
+        }
+
+        function startTimer() {
+            const hours = parseInt(document.getElementById('hours').value) || 0;
+            const minutes = parseInt(document.getElementById('minutes').value) || 0;
+            const seconds = parseInt(document.getElementById('seconds').value) || 0;
+            const additionalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+
+            if (additionalSeconds <= 0) return;
+
+            totalSeconds = additionalSeconds;
+            if (!isRunning) {
+                playCurrentPlayer();
+                isRunning = true;
+                timer = setInterval(updateTimer, 1000);
+                console.log("Timer started with", totalSeconds, "seconds");
+            }
+            updateTimeDisplay();
+            addToHistory(hours, minutes, seconds);
+        }
+
+        function addTime() {
+            const hours = parseInt(document.getElementById('hours').value) || 0;
+            const minutes = parseInt(document.getElementById('minutes').value) || 0;
+            const seconds = parseInt(document.getElementById('seconds').value) || 0;
+            const additionalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+
+            if (additionalSeconds <= 0) return;
+
+            totalSeconds += additionalSeconds;
+            updateTimeDisplay();
+            if (!isRunning && totalSeconds > 0) {
+                playCurrentPlayer();
+                isRunning = true;
+                timer = setInterval(updateTimer, 1000);
+                console.log("Time added, timer started with", totalSeconds, "seconds");
+            }
+            console.log("Time added:", additionalSeconds, "total:", totalSeconds);
+            addToHistory(hours, minutes, seconds);
+        }
+
+        function addToHistory(hours, minutes, seconds) {
+            const additionalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+            const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const timestamp = new Date().toLocaleTimeString('ru-RU');
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item active';
+            historyItem.innerHTML = `${timestamp} Добавлено: ${timeString} (${additionalSeconds} сек)`;
+            historyItem.dataset.secondsLeft = additionalSeconds;
+            historyList.insertBefore(historyItem, historyList.firstChild);
+            historyEntries.push({ element: historyItem, secondsLeft: additionalSeconds });
+            updateHistoryStatus();
+        }
+
+        function updateHistoryStatus() {
+            let remainingTotal = totalSeconds;
+            for (let i = historyEntries.length - 1; i >= 0; i--) {
+                const entry = historyEntries[i];
+                if (remainingTotal > 0) {
+                    entry.element.classList.remove('done');
+                    entry.element.classList.add('active');
+                    remainingTotal -= entry.secondsLeft;
+                } else {
+                    entry.element.classList.remove('active');
+                    entry.element.classList.add('done');
+                }
+            }
+        }
+
+        function playCurrentPlayer() {
+            try {
+                if (currentPlayer === 'youtube') ytPlayer.playVideo();
+                else if (currentPlayer === 'video') videoPlayer.play();
+                else if (currentPlayer === 'vkvideo') {
+                    document.getElementById('vkVideoPlayer').contentWindow.postMessage('{"method":"play"}', '*');
+                    console.log("VK Video play command sent");
+                }
+                else if (currentPlayer === 'rutube') {
+                    document.getElementById('rutubePlayer').contentWindow.postMessage('{"type":"player:play"}', '*');
+                    console.log("Rutube play command sent");
+                }
+                else if (currentPlayer === 'twitch') {
+                    document.getElementById('twitchPlayer').contentWindow.postMessage({ eventName: 'play' }, '*');
+                    console.log("Twitch play command sent");
+                }
+            } catch (e) {
+                console.error("Error playing video:", e);
+            }
+        }
+
+        function pauseCurrentPlayer() {
+            try {
+                if (currentPlayer === 'youtube') ytPlayer.pauseVideo();
+                else if (currentPlayer === 'video') videoPlayer.pause();
+                else if (currentPlayer === 'vkvideo') {
+                    document.getElementById('vkVideoPlayer').contentWindow.postMessage('{"method":"pause"}', '*');
+                    console.log("VK Video pause command sent");
+                }
+                else if (currentPlayer === 'rutube') {
+                    document.getElementById('rutubePlayer').contentWindow.postMessage('{"type":"player:pause"}', '*');
+                    console.log("Rutube pause command sent");
+                }
+                else if (currentPlayer === 'twitch') {
+                    document.getElementById('twitchPlayer').contentWindow.postMessage({ eventName: 'pause' }, '*');
+                    console.log("Twitch pause command sent");
+                }
+            } catch (e) {
+                console.error("Error pausing video:", e);
+            }
+        }
+
+        function updateTimer() {
+            if (totalSeconds <= 0) {
+                stopTimer();
+                pauseCurrentPlayer();
+                return;
+            }
+
+            totalSeconds--;
+            updateTimeDisplay();
+            updateHistoryStatus();
+
+            const secondsDisplay = document.getElementById('secondsDisplay');
+            if (totalSeconds <= 10) {
+                secondsDisplay.style.color = '#ff0000';
+                secondsDisplay.classList.add('smooth-blink');
+            } else {
+                secondsDisplay.style.color = document.body.classList.contains('night-mode') ? '#ffffff' : '#000000';
+                secondsDisplay.classList.remove('smooth-blink');
+            }
+        }
+
+        function stopTimer() {
+            if (timer) clearInterval(timer);
+            isRunning = false;
+            totalSeconds = 0;
+            updateTimeDisplay();
+            resetDisplayStyles();
+            pauseCurrentPlayer();
+            updateHistoryStatus();
+            console.log("Timer stopped");
+        }
+
+        function updateTimeDisplay() {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            document.getElementById('hoursDisplay').textContent = h.toString().padStart(2, '0');
+            document.getElementById('minutesDisplay').textContent = m.toString().padStart(2, '0');
+            document.getElementById('secondsDisplay').textContent = s.toString().padStart(2, '0');
+        }
+
+        function resetDisplayStyles() {
+            const displays = ['hoursDisplay', 'minutesDisplay', 'secondsDisplay'];
+            displays.forEach(id => {
+                const element = document.getElementById(id);
+                element.style.color = document.body.classList.contains('night-mode') ? '#ffffff' : '#000000';
+                element.classList.remove('smooth-blink');
+            });
+        }
+
+        function toggleNightMode() {
+            document.body.classList.toggle('night-mode');
+            const toggle = document.querySelector('.night-mode-toggle');
+            if (toggle) {
+                toggle.textContent = document.body.classList.contains('night-mode') ? '☀' : '☾';
+            }
+            resetDisplayStyles();
+            console.log("Night mode toggled:", document.body.classList.contains('night-mode'));
+        }
+    </script>
+</body>
+</html>
